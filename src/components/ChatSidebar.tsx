@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,17 +43,19 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Welcome message
+    // Enhanced welcome message
     const welcomeMessage: Message = {
       id: 'welcome',
-      text: `Hi! I'm your AI assistant. I can help you analyze the data from "${fileName}". You can ask me questions like:
+      text: `Hey there! 👋 I'm your AI data analyst, and I'm excited to help you explore "${fileName}"! 
 
-• "What's the average value of [column name]?"
-• "Show me the top 5 records"
-• "What patterns do you see in the data?"
-• "Summarize the key insights"
+I can answer questions like:
+• "Which month had the maximum revenue?" 📈
+• "When did we cross our planned revenue?" 🎯
+• "What's the trend in our sales data?" 📊
+• "Compare actual vs planned performance" ⚖️
+• "Show me insights about [specific metric]" 💡
 
-What would you like to know about your data?`,
+I've analyzed your data and I'm ready to dive deep into any patterns or insights you're curious about. What would you like to discover first?`,
       sender: 'ai',
       timestamp: new Date()
     };
@@ -68,6 +69,60 @@ What would you like to know about your data?`,
     }
   }, [messages]);
 
+  const findBestMatchingColumn = (keywords: string[]): string | null => {
+    const lowerColumns = columns.map(col => col.toLowerCase());
+    
+    for (const keyword of keywords) {
+      const match = lowerColumns.find(col => col.includes(keyword.toLowerCase()));
+      if (match) {
+        return columns[lowerColumns.indexOf(match)];
+      }
+    }
+    return null;
+  };
+
+  const getMonthFromRow = (row: DataRow): string | null => {
+    // Look for month/date columns and extract month
+    const monthColumns = columns.filter(col => 
+      col.toLowerCase().includes('month') || 
+      col.toLowerCase().includes('date') ||
+      col.toLowerCase().includes('time') ||
+      col.toLowerCase().includes('period')
+    );
+    
+    for (const col of monthColumns) {
+      const value = String(row[col]);
+      if (value) {
+        // Handle various month formats
+        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                          'july', 'august', 'september', 'october', 'november', 'december'];
+        const monthAbbrev = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                           'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        
+        const lowerValue = value.toLowerCase();
+        
+        // Check for full month names
+        for (let i = 0; i < monthNames.length; i++) {
+          if (lowerValue.includes(monthNames[i]) || lowerValue.includes(monthAbbrev[i])) {
+            return monthNames[i].charAt(0).toUpperCase() + monthNames[i].slice(1);
+          }
+        }
+        
+        // If it's a date, try to parse it
+        if (value.includes('/') || value.includes('-')) {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleString('default', { month: 'long' });
+          }
+        }
+        
+        // Return the original value if it seems to be a month identifier
+        return value;
+      }
+    }
+    return null;
+  };
+
   const analyzeData = (query: string): string => {
     const lowerQuery = query.toLowerCase();
     
@@ -77,22 +132,141 @@ What would you like to know about your data?`,
       return values.every(val => typeof val === 'number' || !isNaN(Number(val)));
     });
 
+    // Enhanced query handling with friendlier responses
+    
+    // Maximum revenue analysis
+    if (lowerQuery.includes('max') && (lowerQuery.includes('revenue') || lowerQuery.includes('sales'))) {
+      const revenueCol = findBestMatchingColumn(['revenue', 'sales', 'income', 'earnings']);
+      
+      if (revenueCol) {
+        let maxRevenue = -Infinity;
+        let maxMonth = '';
+        let maxRow: DataRow | null = null;
+        
+        data.forEach(row => {
+          const revenue = Number(row[revenueCol]);
+          if (!isNaN(revenue) && revenue > maxRevenue) {
+            maxRevenue = revenue;
+            maxMonth = getMonthFromRow(row) || 'Unknown';
+            maxRow = row;
+          }
+        });
+        
+        return `🎉 Great question! The highest revenue of **${maxRevenue.toLocaleString()}** was achieved in **${maxMonth}**! 
+
+That's quite impressive! Would you like me to analyze what might have contributed to this peak performance? 📈`;
+      }
+    }
+
+    // Plan vs actual revenue crossing analysis
+    if ((lowerQuery.includes('cross') || lowerQuery.includes('exceed') || lowerQuery.includes('beat')) && 
+        (lowerQuery.includes('plan') || lowerQuery.includes('target') || lowerQuery.includes('goal'))) {
+      
+      const actualCol = findBestMatchingColumn(['actual', 'real', 'achieved', 'revenue', 'sales']);
+      const planCol = findBestMatchingColumn(['plan', 'planned', 'target', 'goal', 'budget']);
+      
+      if (actualCol && planCol) {
+        const crossingMonths: string[] = [];
+        
+        data.forEach(row => {
+          const actual = Number(row[actualCol]);
+          const planned = Number(row[planCol]);
+          const month = getMonthFromRow(row);
+          
+          if (!isNaN(actual) && !isNaN(planned) && actual > planned && month) {
+            crossingMonths.push(`${month} (${actual.toLocaleString()} vs ${planned.toLocaleString()})`);
+          }
+        });
+        
+        if (crossingMonths.length > 0) {
+          return `🎯 Excellent performance! You exceeded your planned revenue in these months:
+
+${crossingMonths.map(month => `✅ ${month}`).join('\n')}
+
+That's ${crossingMonths.length} month${crossingMonths.length > 1 ? 's' : ''} of beating your targets! Keep up the great work! 🚀`;
+        } else {
+          return `🎯 Based on my analysis, it looks like the planned targets haven't been exceeded yet in the data I can see. But don't worry - this gives us great insight into areas for improvement! 
+
+Would you like me to analyze how close you came to your targets in different months? 📊`;
+        }
+      }
+    }
+
+    // Revenue trend analysis
+    if ((lowerQuery.includes('trend') || lowerQuery.includes('pattern') || lowerQuery.includes('over time')) && 
+        (lowerQuery.includes('revenue') || lowerQuery.includes('sales'))) {
+      
+      const revenueCol = findBestMatchingColumn(['revenue', 'sales', 'income']);
+      
+      if (revenueCol) {
+        const monthlyData: { month: string; revenue: number }[] = [];
+        
+        data.forEach(row => {
+          const revenue = Number(row[revenueCol]);
+          const month = getMonthFromRow(row);
+          
+          if (!isNaN(revenue) && month) {
+            monthlyData.push({ month, revenue });
+          }
+        });
+        
+        if (monthlyData.length > 1) {
+          const isIncreasing = monthlyData[monthlyData.length - 1].revenue > monthlyData[0].revenue;
+          const avgRevenue = monthlyData.reduce((sum, item) => sum + item.revenue, 0) / monthlyData.length;
+          
+          return `📈 Here's what I found about your revenue trend:
+
+**Overall Direction:** ${isIncreasing ? '📈 Upward trend - great job!' : '📉 Needs attention'}
+**Average Revenue:** ${avgRevenue.toFixed(0).toLocaleString()}
+**Best Month:** ${monthlyData.reduce((max, current) => current.revenue > max.revenue ? current : max).month}
+**Total Months Analyzed:** ${monthlyData.length}
+
+${isIncreasing ? 'Your revenue is growing - keep up the momentum! 🚀' : 'There are opportunities to boost performance. Would you like me to analyze potential improvement areas? 💡'}`;
+        }
+      }
+    }
+
+    // Handle comparison questions
+    if (lowerQuery.includes('compare') && (lowerQuery.includes('actual') || lowerQuery.includes('plan'))) {
+      const actualCol = findBestMatchingColumn(['actual', 'real', 'achieved']);
+      const planCol = findBestMatchingColumn(['plan', 'planned', 'target']);
+      
+      if (actualCol && planCol) {
+        const totalActual = data.reduce((sum, row) => sum + (Number(row[actualCol]) || 0), 0);
+        const totalPlanned = data.reduce((sum, row) => sum + (Number(row[planCol]) || 0), 0);
+        const variance = totalActual - totalPlanned;
+        const variancePercent = ((variance / totalPlanned) * 100).toFixed(1);
+        
+        return `⚖️ Here's your Plan vs Actual comparison:
+
+**Total Planned:** ${totalPlanned.toLocaleString()}
+**Total Actual:** ${totalActual.toLocaleString()}
+**Variance:** ${variance.toLocaleString()} (${variancePercent}%)
+
+${variance > 0 ? 
+  `🎉 Fantastic! You're ${variancePercent}% ahead of plan!` : 
+  `📊 You're ${Math.abs(Number(variancePercent))}% below plan - let's find opportunities to close this gap!`}
+
+Would you like me to break this down by month to see where the biggest opportunities are? 🔍`;
+      }
+    }
+
     // Handle specific queries
     if (lowerQuery.includes('total') || lowerQuery.includes('sum')) {
-      const results = numericColumns.map(col => {
+      const results = numericColumns.slice(0, 3).map(col => {
         const sum = data.reduce((acc, row) => acc + (Number(row[col]) || 0), 0);
-        return `${col}: ${sum.toLocaleString()}`;
+        return `**${col}:** ${sum.toLocaleString()}`;
       });
-      return `Here are the totals:\n${results.join('\n')}`;
+      return `💰 Here are your totals:\n\n${results.join('\n')}\n\nThese numbers tell an interesting story! Want me to dive deeper into any specific metric? 🤔`;
     }
 
     if (lowerQuery.includes('average') || lowerQuery.includes('mean')) {
-      const results = numericColumns.map(col => {
+      const results = numericColumns.slice(0, 3).map(col => {
         const values = data.map(row => Number(row[col])).filter(val => !isNaN(val));
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        return `${col}: ${avg.toFixed(2)}`;
+        return `**${col}:** ${avg.toFixed(2)}`;
       });
-      return `Here are the averages:\n${results.join('\n')}`;
+      return `📊 Here are your averages:\n\n${results.join('\n')}\n\nAverages give us a great baseline - would you like to see which months performed above or below these averages? 📈`;
     }
 
     if (lowerQuery.includes('maximum') || lowerQuery.includes('max') || lowerQuery.includes('highest')) {
@@ -131,41 +305,47 @@ What would you like to know about your data?`,
     }
 
     if (lowerQuery.includes('summary') || lowerQuery.includes('overview') || lowerQuery.includes('insights')) {
-      const categoricalColumns = columns.filter(col => 
-        !numericColumns.includes(col)
-      );
+      const revenueCol = findBestMatchingColumn(['revenue', 'sales', 'income']);
+      const planCol = findBestMatchingColumn(['plan', 'planned', 'target']);
+      
+      let summary = `🎯 **Smart Analysis for ${fileName}**\n\n`;
+      summary += `📈 **Quick Stats:**\n`;
+      summary += `• ${data.length} records analyzed\n`;
+      summary += `• ${numericColumns.length} key metrics tracked\n\n`;
 
-      let summary = `📊 **Data Summary for ${fileName}**\n\n`;
-      summary += `📈 **Dataset Overview:**\n`;
-      summary += `• Total records: ${data.length}\n`;
-      summary += `• Total columns: ${columns.length}\n`;
-      summary += `• Numeric columns: ${numericColumns.length}\n`;
-      summary += `• Categorical columns: ${categoricalColumns.length}\n\n`;
-
-      if (numericColumns.length > 0) {
-        summary += `🔢 **Numeric Analysis:**\n`;
-        numericColumns.slice(0, 3).forEach(col => {
-          const values = data.map(row => Number(row[col])).filter(val => !isNaN(val));
-          const avg = values.reduce((a, b) => a + b, 0) / values.length;
-          const max = Math.max(...values);
-          const min = Math.min(...values);
-          summary += `• ${col}: Avg ${avg.toFixed(2)}, Range ${min}-${max}\n`;
-        });
+      if (revenueCol) {
+        const totalRevenue = data.reduce((sum, row) => sum + (Number(row[revenueCol]) || 0), 0);
+        const avgRevenue = totalRevenue / data.length;
+        summary += `💰 **Revenue Insights:**\n`;
+        summary += `• Total Revenue: ${totalRevenue.toLocaleString()}\n`;
+        summary += `• Average per Period: ${avgRevenue.toFixed(0)}\n\n`;
       }
+
+      if (planCol && revenueCol) {
+        const totalPlan = data.reduce((sum, row) => sum + (Number(row[planCol]) || 0), 0);
+        const totalRevenue = data.reduce((sum, row) => sum + (Number(row[revenueCol]) || 0), 0);
+        const performanceRatio = ((totalRevenue / totalPlan) * 100).toFixed(1);
+        summary += `🎯 **Performance vs Plan:** ${performanceRatio}%\n\n`;
+      }
+
+      summary += `💡 **What would you like to explore next?**\n`;
+      summary += `• Monthly performance trends\n`;
+      summary += `• Best and worst performing periods\n`;
+      summary += `• Opportunities for improvement\n`;
 
       return summary;
     }
 
-    // Default response
-    return `I can help you analyze your data from "${fileName}" which contains ${data.length} records and ${columns.length} columns. Try asking me about:
+    // Enhanced default response
+    return `🤔 That's an interesting question! I have access to your data from "${fileName}" with ${data.length} records. 
 
-• Statistical summaries (average, total, max, min)
-• Data counts and distributions  
-• Top records or specific values
-• Column information
-• Data insights and patterns
+I'm especially good at analyzing:
+• 📈 **Revenue patterns** - "Which month had the highest sales?"
+• 🎯 **Performance vs targets** - "When did we exceed our goals?"
+• 📊 **Trends and comparisons** - "How are we trending over time?"
+• 💡 **Business insights** - "What patterns do you see?"
 
-What specific aspect would you like to explore?`;
+Could you rephrase your question or try one of these examples? I'm here to help you uncover valuable insights! ✨`;
   };
 
   const handleSendMessage = async () => {
@@ -182,7 +362,7 @@ What specific aspect would you like to explore?`;
     setInputText('');
     setIsLoading(true);
 
-    // Simulate AI processing delay
+    // Simulate AI processing delay with more realistic timing
     setTimeout(() => {
       const aiResponse = analyzeData(inputText);
       const aiMessage: Message = {
@@ -194,7 +374,7 @@ What specific aspect would you like to explore?`;
 
       setMessages(prev => [...prev, aiMessage]);
       setIsLoading(false);
-    }, 1000 + Math.random() * 1000);
+    }, 800 + Math.random() * 1200);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -205,10 +385,10 @@ What specific aspect would you like to explore?`;
   };
 
   const quickQuestions = [
-    "What's the summary of this data?",
-    "Show me the averages",
-    "What are the column names?",
-    "How many records are there?",
+    "Which month had the maximum revenue?",
+    "When did we cross our planned targets?",
+    "What's the revenue trend over time?",
+    "Compare actual vs planned performance",
   ];
 
   return (
@@ -218,7 +398,7 @@ What specific aspect would you like to explore?`;
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
-            AI Assistant
+            AI Data Analyst
           </CardTitle>
           <Button
             variant="ghost"
@@ -230,7 +410,7 @@ What specific aspect would you like to explore?`;
           </Button>
         </div>
         <p className="text-blue-100 text-sm">
-          Ask questions about your data
+          Your smart data companion 🚀
         </p>
       </CardHeader>
 
@@ -286,7 +466,7 @@ What specific aspect would you like to explore?`;
                 <div className="bg-gray-100 p-3 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm text-gray-600">Analyzing data...</span>
+                    <span className="text-sm text-gray-600">Analyzing your data... 🧠</span>
                   </div>
                 </div>
               </div>
@@ -298,7 +478,7 @@ What specific aspect would you like to explore?`;
       {/* Quick Questions */}
       {messages.length === 1 && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <p className="text-sm font-medium text-gray-700 mb-2">Quick questions:</p>
+          <p className="text-sm font-medium text-gray-700 mb-2">🚀 Try these smart questions:</p>
           <div className="space-y-2">
             {quickQuestions.map((question, index) => (
               <button
@@ -321,7 +501,7 @@ What specific aspect would you like to explore?`;
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Ask about your data..."
+            placeholder="Ask me anything about your data... 💬"
             className="flex-1"
             disabled={isLoading}
           />
