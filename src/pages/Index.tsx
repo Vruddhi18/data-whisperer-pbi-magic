@@ -6,7 +6,9 @@ import ExcelUploader from '@/components/ExcelUploader';
 import DashboardCharts from '@/components/DashboardCharts';
 import DataTable from '@/components/DataTable';
 import ChatSidebar from '@/components/ChatSidebar';
-import { MessageSquare, Upload, BarChart3, Table } from 'lucide-react';
+import ChartControls, { ChartConfig } from '@/components/ChartControls';
+import CustomChart from '@/components/CustomChart';
+import { MessageSquare, Upload, BarChart3, Table, Settings } from 'lucide-react';
 
 export interface DataRow {
   [key: string]: string | number;
@@ -17,15 +19,25 @@ const Index = () => {
   const [columns, setColumns] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [customCharts, setCustomCharts] = useState<ChartConfig[]>([]);
 
   const handleDataProcessed = (processedData: DataRow[], columnNames: string[], file: string) => {
     setData(processedData);
     setColumns(columnNames);
     setFileName(file);
+    setCustomCharts([]); // Reset custom charts when new data is loaded
   };
 
   const toggleChat = () => {
     setIsChatOpen(!isChatOpen);
+  };
+
+  const handleGenerateChart = (config: ChartConfig) => {
+    setCustomCharts(prev => [...prev, config]);
+  };
+
+  const handleRemoveChart = (id: string) => {
+    setCustomCharts(prev => prev.filter(chart => chart.id !== id));
   };
 
   return (
@@ -73,10 +85,14 @@ const Index = () => {
             </div>
 
             <Tabs defaultValue="dashboard" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-white/70 backdrop-blur-sm">
+              <TabsList className="grid w-full grid-cols-4 bg-white/70 backdrop-blur-sm">
                 <TabsTrigger value="dashboard" className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Dashboard
+                </TabsTrigger>
+                <TabsTrigger value="custom" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Custom Charts
                 </TabsTrigger>
                 <TabsTrigger value="data" className="flex items-center gap-2">
                   <Table className="h-4 w-4" />
@@ -86,6 +102,29 @@ const Index = () => {
               
               <TabsContent value="dashboard" className="mt-6">
                 <DashboardCharts data={data} columns={columns} />
+              </TabsContent>
+
+              <TabsContent value="custom" className="mt-6">
+                <div className="space-y-6">
+                  <ChartControls 
+                    data={data} 
+                    columns={columns} 
+                    onGenerateChart={handleGenerateChart}
+                  />
+                  
+                  {customCharts.length > 0 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {customCharts.map((chart) => (
+                        <CustomChart
+                          key={chart.id}
+                          config={chart}
+                          data={data}
+                          onRemove={handleRemoveChart}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </TabsContent>
               
               <TabsContent value="data" className="mt-6">

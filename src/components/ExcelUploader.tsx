@@ -1,7 +1,7 @@
-
 import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Upload, FileSpreadsheet, AlertCircle, Sheet } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { DataRow } from '@/pages/Index';
@@ -14,26 +14,53 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [currentFileName, setCurrentFileName] = useState<string>('');
 
   const processExcelFile = async (file: File) => {
     setIsProcessing(true);
     
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+      
+      setWorkbook(wb);
+      setSheetNames(wb.SheetNames);
+      setCurrentFileName(file.name);
+      
+      if (wb.SheetNames.length === 1) {
+        // If only one sheet, process it directly
+        processSheet(wb, wb.SheetNames[0], file.name);
+      } else {
+        // Multiple sheets, let user select
+        setSelectedSheet(wb.SheetNames[0]);
+        toast.success(`Found ${wb.SheetNames.length} sheets. Please select a sheet to process.`);
+      }
+      
+    } catch (error) {
+      console.error('Error processing Excel file:', error);
+      toast.error('Failed to process Excel file. Please ensure it\'s a valid Excel file.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const processSheet = (wb: XLSX.WorkBook, sheetName: string, fileName: string) => {
+    try {
+      const worksheet = wb.Sheets[sheetName];
       
       // Convert to JSON with header row as keys
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
       
       if (jsonData.length === 0) {
-        toast.error('The Excel file appears to be empty or has no data');
+        toast.error('The selected sheet appears to be empty or has no data');
         return;
       }
 
       // Clean and format the data
-      const cleanedData = jsonData.map((row: any, index) => {
+      const cleanedData = jsonData.map((row: any) => {
         const cleanRow: DataRow = {};
         Object.keys(row).forEach(key => {
           // Clean column names
@@ -58,19 +85,33 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
       const columns = Object.keys(cleanedData[0] || {});
       
       console.log('Processed Excel data:', { 
+        sheet: sheetName,
         rows: cleanedData.length, 
         columns: columns.length,
         sampleData: cleanedData.slice(0, 3)
       });
 
-      onDataProcessed(cleanedData, columns, file.name);
-      toast.success(`Successfully processed ${cleanedData.length} rows from ${file.name}`);
+      onDataProcessed(cleanedData, columns, `${fileName} - ${sheetName}`);
+      toast.success(`Successfully processed ${cleanedData.length} rows from sheet "${sheetName}"`);
+      
+      // Reset sheet selection state
+      setWorkbook(null);
+      setSheetNames([]);
+      setSelectedSheet('');
       
     } catch (error) {
-      console.error('Error processing Excel file:', error);
-      toast.error('Failed to process Excel file. Please ensure it\'s a valid Excel file.');
-    } finally {
-      setIsProcessing(false);
+      console.error('Error processing sheet:', error);
+      toast.error('Failed to process the selected sheet.');
+    }
+  };
+
+  const handleSheetSelect = (sheetName: string) => {
+    setSelectedSheet(sheetName);
+  };
+
+  const handleProcessSheet = () => {
+    if (workbook && selectedSheet) {
+      processSheet(workbook, selectedSheet, currentFileName);
     }
   };
 
@@ -162,6 +203,37 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
         />
       </div>
 
+      {/* Sheet Selection */}
+      {sheetNames.length > 1 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Sheet className="h-5 w-5 text-blue-600" />
+            <h4 className="text-lg font-semibold text-gray-700">Select Sheet</h4>
+          </div>
+          <div className="space-y-4">
+            <Select value={selectedSheet} onValueChange={handleSheetSelect}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a sheet to process" />
+              </SelectTrigger>
+              <SelectContent>
+                {sheetNames.map((sheetName) => (
+                  <SelectItem key={sheetName} value={sheetName}>
+                    {sheetName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={handleProcessSheet}
+              disabled={!selectedSheet}
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+            >
+              Process Selected Sheet
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -170,7 +242,7 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
             <ul className="space-y-1 text-blue-700">
               <li>• Excel files (.xlsx, .xls)</li>
               <li>• Maximum file size: 10MB</li>
-              <li>• First sheet will be processed</li>
+              <li>• Multiple sheets supported</li>
               <li>• First row should contain column headers</li>
             </ul>
           </div>
