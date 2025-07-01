@@ -81,6 +81,43 @@ I've analyzed your data and I'm ready to dive deep into any patterns or insights
     return null;
   };
 
+  const formatMonthValue = (value: any): string => {
+    if (!value) return 'Unknown';
+    
+    const strValue = String(value).toLowerCase().trim();
+    
+    // Month mapping to convert numbers to proper month names
+    const MONTH_NAMES: { [key: string]: string } = {
+      '1': 'January', '2': 'February', '3': 'March', '4': 'April',
+      '5': 'May', '6': 'June', '7': 'July', '8': 'August',
+      '9': 'September', '10': 'October', '11': 'November', '12': 'December',
+      'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April',
+      'may': 'May', 'jun': 'June', 'jul': 'July', 'aug': 'August',
+      'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December'
+    };
+    
+    // Check if it's a direct month mapping
+    if (MONTH_NAMES[strValue]) {
+      return MONTH_NAMES[strValue];
+    }
+    
+    // Check if it contains a month name
+    for (const [key, monthName] of Object.entries(MONTH_NAMES)) {
+      if (strValue.includes(key) || strValue.includes(monthName.toLowerCase())) {
+        return monthName;
+      }
+    }
+    
+    // If it's a date string, try to parse it
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleString('default', { month: 'long' });
+    }
+    
+    // Return original value if no conversion possible
+    return String(value);
+  };
+
   const getMonthFromRow = (row: DataRow): string | null => {
     // Look for month/date columns and extract month
     const monthColumns = columns.filter(col => 
@@ -91,33 +128,9 @@ I've analyzed your data and I'm ready to dive deep into any patterns or insights
     );
     
     for (const col of monthColumns) {
-      const value = String(row[col]);
+      const value = row[col];
       if (value) {
-        // Handle various month formats
-        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
-                          'july', 'august', 'september', 'october', 'november', 'december'];
-        const monthAbbrev = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
-                           'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        
-        const lowerValue = value.toLowerCase();
-        
-        // Check for full month names
-        for (let i = 0; i < monthNames.length; i++) {
-          if (lowerValue.includes(monthNames[i]) || lowerValue.includes(monthAbbrev[i])) {
-            return monthNames[i].charAt(0).toUpperCase() + monthNames[i].slice(1);
-          }
-        }
-        
-        // If it's a date, try to parse it
-        if (value.includes('/') || value.includes('-')) {
-          const date = new Date(value);
-          if (!isNaN(date.getTime())) {
-            return date.toLocaleString('default', { month: 'long' });
-          }
-        }
-        
-        // Return the original value if it seems to be a month identifier
-        return value;
+        return formatMonthValue(value);
       }
     }
     return null;

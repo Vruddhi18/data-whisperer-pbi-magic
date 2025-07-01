@@ -27,6 +27,43 @@ interface DashboardChartsProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6366F1', '#EC4899', '#14B8A6'];
 
+// Month mapping to convert numbers to proper month names
+const MONTH_NAMES = {
+  '1': 'January', '2': 'February', '3': 'March', '4': 'April',
+  '5': 'May', '6': 'June', '7': 'July', '8': 'August',
+  '9': 'September', '10': 'October', '11': 'November', '12': 'December',
+  'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April',
+  'may': 'May', 'jun': 'June', 'jul': 'July', 'aug': 'August',
+  'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December'
+};
+
+const formatMonthValue = (value: any): string => {
+  if (!value) return 'Unknown';
+  
+  const strValue = String(value).toLowerCase().trim();
+  
+  // Check if it's a direct month mapping
+  if (MONTH_NAMES[strValue as keyof typeof MONTH_NAMES]) {
+    return MONTH_NAMES[strValue as keyof typeof MONTH_NAMES];
+  }
+  
+  // Check if it contains a month name
+  for (const [key, monthName] of Object.entries(MONTH_NAMES)) {
+    if (strValue.includes(key) || strValue.includes(monthName.toLowerCase())) {
+      return monthName;
+    }
+  }
+  
+  // If it's a date string, try to parse it
+  const date = new Date(value);
+  if (!isNaN(date.getTime())) {
+    return date.toLocaleString('default', { month: 'long' });
+  }
+  
+  // Return original value if no conversion possible
+  return String(value);
+};
+
 const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
   const { businessMetrics, chartConfigurations } = useMemo(() => {
     // Identify business-relevant columns
@@ -145,7 +182,10 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
 
   const generateComparisonChart = (config: any) => {
     const chartData = data.map(row => {
-      const entry: any = { [config.xAxis]: row[config.xAxis] };
+      const entry: any = { 
+        [config.xAxis]: formatMonthValue(row[config.xAxis]),
+        originalMonth: row[config.xAxis]
+      };
       config.metrics.forEach((metric: string) => {
         entry[metric] = Number(row[metric]) || 0;
       });
@@ -170,6 +210,9 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                 dataKey={config.xAxis}
                 tick={{ fontSize: 12 }}
                 stroke="#64748B"
+                angle={-45}
+                textAnchor="end"
+                height={80}
               />
               <YAxis 
                 tick={{ fontSize: 12 }}
@@ -182,6 +225,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
+                labelFormatter={(value) => `Month: ${value}`}
               />
               <Legend />
               {config.metrics.map((metric: string, index: number) => (
@@ -255,7 +299,10 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
 
   const generateLineChart = (config: any) => {
     const chartData = data.map(row => {
-      const entry: any = { [config.xAxis]: row[config.xAxis] };
+      const entry: any = { 
+        [config.xAxis]: formatMonthValue(row[config.xAxis]),
+        originalMonth: row[config.xAxis]
+      };
       config.metrics.forEach((metric: string) => {
         entry[metric] = Number(row[metric]) || 0;
       });
@@ -280,6 +327,9 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                 dataKey={config.xAxis}
                 tick={{ fontSize: 12 }}
                 stroke="#64748B"
+                angle={-45}
+                textAnchor="end"
+                height={80}
               />
               <YAxis 
                 tick={{ fontSize: 12 }}
@@ -292,6 +342,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
+                labelFormatter={(value) => `Month: ${value}`}
               />
               <Legend />
               {config.metrics.map((metric: string, index: number) => (
@@ -314,7 +365,10 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
 
   const generateBarChart = (config: any) => {
     const chartData = data.map(row => {
-      const entry: any = { [config.xAxis]: row[config.xAxis] };
+      const entry: any = { 
+        [config.xAxis]: formatMonthValue(row[config.xAxis]),
+        originalMonth: row[config.xAxis]
+      };
       config.metrics.forEach((metric: string) => {
         entry[metric] = Number(row[metric]) || 0;
       });
@@ -339,6 +393,9 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                 dataKey={config.xAxis}
                 tick={{ fontSize: 12 }}
                 stroke="#64748B"
+                angle={-45}
+                textAnchor="end"
+                height={80}
               />
               <YAxis 
                 tick={{ fontSize: 12 }}
@@ -351,6 +408,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
+                labelFormatter={(value) => `Month: ${value}`}
               />
               <Legend />
               {config.metrics.map((metric: string, index: number) => (
