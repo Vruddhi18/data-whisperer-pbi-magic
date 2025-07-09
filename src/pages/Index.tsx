@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +9,8 @@ import ChartControls, { ChartConfig } from '@/components/ChartControls';
 import CustomChart from '@/components/CustomChart';
 import { MessageSquare, Upload, BarChart3, Table, Settings, Download, Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import PowerBIEmbed from '@/components/PowerBIEmbed';
+import { toast } from 'sonner';
 
 export interface DataRow {
   [key: string]: string | number;
@@ -27,6 +28,29 @@ const Index = () => {
     setColumns(columnNames);
     setFileName(file);
     setCustomCharts([]);
+    
+    // Log processed data for verification
+    console.log('Data processed with proper month formatting:', {
+      rows: processedData.length,
+      columns: columnNames.length,
+      sample: processedData.slice(0, 3)
+    });
+  };
+
+  const handleExportToPowerBI = () => {
+    if (data.length === 0) {
+      toast.error('No data available to export');
+      return;
+    }
+    
+    try {
+      const { powerBIService } = require('@/services/powerBiService');
+      powerBIService.exportToPowerBI(data, columns, fileName);
+      toast.success('Power BI export completed successfully!');
+    } catch (error) {
+      console.error('Power BI export error:', error);
+      toast.error('Failed to export to Power BI');
+    }
   };
 
   const toggleChat = () => {
@@ -39,11 +63,6 @@ const Index = () => {
 
   const handleRemoveChart = (id: string) => {
     setCustomCharts(prev => prev.filter(chart => chart.id !== id));
-  };
-
-  const handleExportToPowerBI = () => {
-    // TODO: Implement Power BI export functionality
-    console.log('Exporting to Power BI...');
   };
 
   return (
@@ -128,20 +147,27 @@ const Index = () => {
         ) : (
           <div className={`transition-all duration-500 ${isChatOpen ? 'mr-96' : ''}`}>
             <Tabs defaultValue="dashboard" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-white/70 backdrop-blur-md border border-slate-200/50 shadow-lg rounded-xl p-1 mb-8">
+              <TabsList className="grid w-full grid-cols-4 bg-white/70 backdrop-blur-md border border-slate-200/50 shadow-lg rounded-xl p-1 mb-8">
                 <TabsTrigger 
                   value="dashboard" 
                   className="flex items-center gap-2 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-500 data-[state=active]:text-white transition-all duration-300"
                 >
                   <BarChart3 className="h-4 w-4" />
-                  <span className="font-medium">Analytics Dashboard</span>
+                  <span className="font-medium">Analytics</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="powerbi" 
+                  className="flex items-center gap-2 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white transition-all duration-300"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="font-medium">Power BI</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="custom" 
                   className="flex items-center gap-2 rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-500 data-[state=active]:text-white transition-all duration-300"
                 >
                   <Settings className="h-4 w-4" />
-                  <span className="font-medium">Custom Views</span>
+                  <span className="font-medium">Custom</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="data" 
@@ -156,6 +182,10 @@ const Index = () => {
                 <div className="bg-white/40 backdrop-blur-sm rounded-2xl border border-slate-200/50 shadow-xl p-6">
                   <DashboardCharts data={data} columns={columns} />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="powerbi" className="mt-8">
+                <PowerBIEmbed data={data} columns={columns} fileName={fileName} />
               </TabsContent>
 
               <TabsContent value="custom" className="mt-8">
