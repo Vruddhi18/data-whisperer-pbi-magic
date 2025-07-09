@@ -1,20 +1,15 @@
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import pandas as pd
-import io
 import json
-from typing import Dict, List, Any
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from io import BytesIO
+from typing import Optional, List, Dict, Any
+import calendar
 
 app = FastAPI(title="AI Power BI Studio API", version="1.0.0")
 
-# Configure CORS
+# Enable CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite dev server
@@ -23,161 +18,97 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def format_month_value(value: Any) -> str:
-    """Convert month values to proper month names"""
-    if pd.isna(value) or value == '':
-        return 'Unknown'
-    
+def format_month_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert numeric months to proper month names"""
     month_mapping = {
         1: 'January', 2: 'February', 3: 'March', 4: 'April',
         5: 'May', 6: 'June', 7: 'July', 8: 'August',
-        9: 'September', 10: 'October', 11: 'November', 12: 'December',
-        '1': 'January', '2': 'February', '3': 'March', '4': 'April',
-        '5': 'May', '6': 'June', '7': 'July', '8': 'August',
-        '9': 'September', '10': 'October', '11': 'November', '12': 'December'
+        9: 'September', 10: 'October', 11: 'November', 12: 'December'
     }
     
-    # Direct mapping
-    if value in month_mapping:
-        return month_mapping[value]
+    for col in df.columns:
+        if 'month' in col.lower():
+            # Try to convert numeric months to month names
+            try:
+                df[col] = df[col].apply(lambda x: month_mapping.get(x, x) if pd.notna(x) and isinstance(x, (int, float)) and 1 <= x <= 12 else x)
+            except:
+                pass
     
-    # String processing
-    str_value = str(value).lower().strip()
-    
-    # Check for month abbreviations
-    month_abbrevs = {
-        'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April',
-        'may': 'May', 'jun': 'June', 'jul': 'July', 'aug': 'August',
-        'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December'
-    }
-    
-    if str_value in month_abbrevs:
-        return month_abbrevs[str_value]
-    
-    # Try to parse as date
-    try:
-        if isinstance(value, (int, float)):
-            if 1 <= value <= 12:
-                return month_mapping[int(value)]
-        date_val = pd.to_datetime(value, errors='coerce')
-        if not pd.isna(date_val):
-            return date_val.strftime('%B')
-    except:
-        pass
-    
-    return str(value)
+    return df
 
-def clean_and_process_data(df: pd.DataFrame) -> tuple[List[Dict], List[str]]:
-    """Clean and process the dataframe with proper month formatting"""
-    
-    # Clean column names
-    df.columns = df.columns.astype(str).str.strip().str.replace(r'\s+', ' ', regex=True)
-    
-    # Identify month columns
-    month_columns = [col for col in df.columns if 'month' in col.lower()]
-    
-    # Process each row
-    processed_data = []
-    for _, row in df.iterrows():
-        clean_row = {}
-        for col in df.columns:
-            value = row[col]
-            
-            # Handle month columns specially
-            if col in month_columns:
-                clean_row[col] = format_month_value(value)
-            else:
-                # Clean other values
-                if pd.isna(value):
-                    clean_row[col] = ''
-                elif isinstance(value, str):
-                    clean_value = value.strip()
-                    # Try to convert numeric strings
-                    try:
-                        if clean_value.replace(',', '').replace('.', '').replace('-', '').isdigit():
-                            clean_row[col] = float(clean_value.replace(',', ''))
-                        else:
-                            clean_row[col] = clean_value
-                    except:
-                        clean_row[col] = clean_value
-                else:
-                    clean_row[col] = value
-        
-        processed_data.append(clean_row)
-    
-    columns = list(df.columns)
-    logger.info(f"Processed {len(processed_data)} rows with {len(columns)} columns")
-    logger.info(f"Month columns found: {month_columns}")
-    
-    return processed_data, columns
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "message": "FastAPI backend is running"}
 
 @app.post("/api/upload-excel")
 async def upload_excel(file: UploadFile = File(...)):
-    """Process uploaded Excel file and return cleaned data"""
-    
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload Excel files only.")
-    
     try:
-        # Read file content
-        content = await file.read()
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail="Only Excel files are supported")
         
-        # Load Excel file
-        excel_file = pd.ExcelFile(io.BytesIO(content))
-        sheet_names = excel_file.sheet_names
+        # Read the Excel file
+        contents = await file.read()
+        excel_file = BytesIO(contents)
         
-        logger.info(f"Found {len(sheet_names)} sheets: {sheet_names}")
+        # Check if file has multiple sheets
+        excel_data = pd.ExcelFile(excel_file)
+        sheet_names = excel_data.sheet_names
         
-        if len(sheet_names) == 1:
-            # Process single sheet directly
-            df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_names[0])
-            processed_data, columns = clean_and_process_data(df)
-            
-            return JSONResponse({
-                "success": True,
-                "data": processed_data,
-                "columns": columns,
-                "fileName": f"{file.filename} - {sheet_names[0]}",
-                "sheets": sheet_names
-            })
-        else:
-            # Multiple sheets - return sheet info for user selection
-            return JSONResponse({
+        if len(sheet_names) > 1:
+            return {
                 "success": True,
                 "multipleSheets": True,
                 "sheets": sheet_names,
                 "fileName": file.filename
-            })
-            
+            }
+        
+        # Single sheet - process directly
+        df = pd.read_excel(excel_file, sheet_name=0)
+        
+        # Format month columns
+        df = format_month_columns(df)
+        
+        # Convert to JSON-serializable format
+        data = df.fillna('').to_dict('records')
+        columns = df.columns.tolist()
+        
+        return {
+            "success": True,
+            "data": data,
+            "columns": columns,
+            "fileName": file.filename,
+            "multipleSheets": False
+        }
+        
     except Exception as e:
-        logger.error(f"Error processing Excel file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @app.post("/api/process-sheet")
-async def process_sheet(file: UploadFile = File(...), sheet_name: str = ""):
-    """Process specific sheet from Excel file"""
-    
+async def process_sheet(file: UploadFile = File(...), sheet_name: str = Form(...)):
     try:
-        content = await file.read()
-        df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name)
-        processed_data, columns = clean_and_process_data(df)
+        contents = await file.read()
+        excel_file = BytesIO(contents)
         
-        return JSONResponse({
+        # Read specific sheet
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        
+        # Format month columns
+        df = format_month_columns(df)
+        
+        # Convert to JSON-serializable format
+        data = df.fillna('').to_dict('records')
+        columns = df.columns.tolist()
+        
+        return {
             "success": True,
-            "data": processed_data,
+            "data": data,
             "columns": columns,
-            "fileName": f"{file.filename} - {sheet_name}"
-        })
+            "fileName": file.filename
+        }
         
     except Exception as e:
-        logger.error(f"Error processing sheet {sheet_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing sheet: {str(e)}")
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "AI Power BI Studio API"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
