@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, PieChart, TrendingUp, Activity, Plus } from 'lucide-react';
+import { BarChart3, PieChart, TrendingUp, Activity, Plus, BarChart2, CreditCard, Filter } from 'lucide-react';
 import { DataRow } from '@/pages/Index';
 
 interface ChartControlsProps {
@@ -14,20 +14,24 @@ interface ChartControlsProps {
 
 export interface ChartConfig {
   id: string;
-  type: 'bar' | 'pie' | 'line' | 'scatter';
+  type: 'bar' | 'pie' | 'line' | 'scatter' | 'histogram' | 'card' | 'slicer';
   title: string;
   xAxis?: string;
   yAxis?: string;
   category?: string;
   value?: string;
+  field?: string; // For cards and slicers
+  bins?: number; // For histograms
 }
 
 const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerateChart }) => {
-  const [chartType, setChartType] = useState<'bar' | 'pie' | 'line' | 'scatter'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'pie' | 'line' | 'scatter' | 'histogram' | 'card' | 'slicer'>('bar');
   const [xAxis, setXAxis] = useState<string>('');
   const [yAxis, setYAxis] = useState<string>('');
   const [category, setCategory] = useState<string>('');
   const [value, setValue] = useState<string>('');
+  const [field, setField] = useState<string>('');
+  const [bins, setBins] = useState<number>(10);
 
   // Identify numeric and categorical columns
   const numericColumns = columns.filter(col => {
@@ -82,6 +86,43 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
           yAxis
         };
         break;
+      case 'histogram':
+        if (!field) {
+          alert('Please select a field for histogram');
+          return;
+        }
+        config = {
+          id,
+          type: 'histogram',
+          title: `${field} Distribution`,
+          field,
+          bins
+        };
+        break;
+      case 'card':
+        if (!field) {
+          alert('Please select a field for the card');
+          return;
+        }
+        config = {
+          id,
+          type: 'card',
+          title: `${field} Summary`,
+          field
+        };
+        break;
+      case 'slicer':
+        if (!field) {
+          alert('Please select a field for the slicer');
+          return;
+        }
+        config = {
+          id,
+          type: 'slicer',
+          title: `${field} Filter`,
+          field
+        };
+        break;
       default:
         return;
     }
@@ -93,6 +134,8 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
     setYAxis('');
     setCategory('');
     setValue('');
+    setField('');
+    setBins(10);
   };
 
   const getQuickChartSuggestions = () => {
@@ -152,6 +195,46 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
       });
     }
 
+    // Histogram suggestion
+    if (numericColumns.length > 0) {
+      suggestions.push({
+        title: `${numericColumns[0]} Distribution`,
+        config: {
+          id: `quick-${Date.now()}-4`,
+          type: 'histogram' as const,
+          title: `${numericColumns[0]} Distribution`,
+          field: numericColumns[0],
+          bins: 10
+        }
+      });
+    }
+
+    // Summary card suggestion
+    if (numericColumns.length > 0) {
+      suggestions.push({
+        title: `${numericColumns[0]} Summary Card`,
+        config: {
+          id: `quick-${Date.now()}-5`,
+          type: 'card' as const,
+          title: `${numericColumns[0]} Summary`,
+          field: numericColumns[0]
+        }
+      });
+    }
+
+    // Slicer suggestion
+    if (categoricalColumns.length > 0) {
+      suggestions.push({
+        title: `${categoricalColumns[0]} Filter`,
+        config: {
+          id: `quick-${Date.now()}-6`,
+          type: 'slicer' as const,
+          title: `${categoricalColumns[0]} Filter`,
+          field: categoricalColumns[0]
+        }
+      });
+    }
+
     return suggestions;
   };
 
@@ -184,6 +267,9 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
                     {suggestion.config.type === 'pie' && <PieChart className="h-4 w-4" />}
                     {suggestion.config.type === 'line' && <TrendingUp className="h-4 w-4" />}
                     {suggestion.config.type === 'scatter' && <Activity className="h-4 w-4" />}
+                    {suggestion.config.type === 'histogram' && <BarChart2 className="h-4 w-4" />}
+                    {suggestion.config.type === 'card' && <CreditCard className="h-4 w-4" />}
+                    {suggestion.config.type === 'slicer' && <Filter className="h-4 w-4" />}
                     <span className="text-xs">{suggestion.title}</span>
                   </div>
                 </Button>
@@ -207,6 +293,9 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
                   <SelectItem value="pie">Pie Chart</SelectItem>
                   <SelectItem value="line">Line Chart</SelectItem>
                   <SelectItem value="scatter">Scatter Plot</SelectItem>
+                  <SelectItem value="histogram">Histogram</SelectItem>
+                  <SelectItem value="card">Summary Card</SelectItem>
+                  <SelectItem value="slicer">Data Slicer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -273,6 +362,39 @@ const ChartControls: React.FC<ChartControlsProps> = ({ data, columns, onGenerate
                   </Select>
                 </div>
               </>
+            )}
+
+            {(chartType === 'histogram' || chartType === 'card' || chartType === 'slicer') && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Field</label>
+                <Select value={field} onValueChange={setField}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(chartType === 'histogram' || chartType === 'card' ? numericColumns : categoricalColumns).map(col => (
+                      <SelectItem key={col} value={col}>{col}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {chartType === 'histogram' && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Number of Bins</label>
+                <Select value={bins.toString()} onValueChange={(value) => setBins(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 bins</SelectItem>
+                    <SelectItem value="10">10 bins</SelectItem>
+                    <SelectItem value="15">15 bins</SelectItem>
+                    <SelectItem value="20">20 bins</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
 

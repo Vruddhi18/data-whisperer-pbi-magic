@@ -1,6 +1,8 @@
 
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   BarChart,
   Bar,
@@ -18,11 +20,12 @@ import {
   ComposedChart
 } from 'recharts';
 import { DataRow } from '@/pages/Index';
-import { TrendingUp, PieChart as PieChartIcon, BarChart3, Activity, DollarSign, Calendar } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, BarChart3, Activity, DollarSign, Calendar, Filter, Plus, CreditCard, BarChart2 } from 'lucide-react';
 
 interface DashboardChartsProps {
   data: DataRow[];
   columns: string[];
+  onGenerateChart?: (config: any) => void;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6366F1', '#EC4899', '#14B8A6'];
@@ -64,7 +67,7 @@ const formatMonthValue = (value: any): string => {
   return String(value);
 };
 
-const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
+const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns, onGenerateChart }) => {
   const { businessMetrics, chartConfigurations } = useMemo(() => {
     // Identify business-relevant columns
     const timeColumns = columns.filter(col => 
@@ -171,6 +174,48 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
         metrics: [planQty, actualQty],
         icon: BarChart3,
         color: 'orange'
+      });
+    }
+
+    // 5. Additional comprehensive analysis charts
+    // Top performers analysis
+    if (salesColumns.length > 0) {
+      configs.push({
+        type: 'card',
+        title: 'Sales Performance Summary',
+        field: salesColumns[0],
+        icon: DollarSign,
+        color: 'indigo'
+      });
+    }
+
+    // Data distribution analysis
+    if (salesColumns.length > 1) {
+      configs.push({
+        type: 'histogram',
+        title: `${salesColumns[1]} Distribution Analysis`,
+        field: salesColumns[1],
+        bins: 10,
+        icon: Activity,
+        color: 'pink'
+      });
+    }
+
+    // Interactive slicer for filtering
+    const categoryCol = columns.find(col => 
+      col.toLowerCase().includes('category') ||
+      col.toLowerCase().includes('type') ||
+      col.toLowerCase().includes('region') ||
+      col.toLowerCase().includes('product')
+    );
+    
+    if (categoryCol) {
+      configs.push({
+        type: 'slicer',
+        title: `${categoryCol} Filter`,
+        field: categoryCol,
+        icon: BarChart3,
+        color: 'cyan'
       });
     }
 
@@ -464,6 +509,173 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
     );
   };
 
+  const generateCardChart = (config: any) => {
+    const fieldValues = data.map(row => Number(row[config.field])).filter(val => !isNaN(val));
+    const sum = fieldValues.reduce((a, b) => a + b, 0);
+    const avg = sum / fieldValues.length;
+    const max = Math.max(...fieldValues);
+    const min = Math.min(...fieldValues);
+    
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 bg-${config.color}-100 rounded-lg`}>
+              <config.icon className={`h-4 w-4 text-${config.color}-600`} />
+            </div>
+            <CardTitle className="text-lg">{config.title}</CardTitle>
+          </div>
+          {onGenerateChart && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onGenerateChart({
+                id: `from-dashboard-${Date.now()}`,
+                type: 'bar',
+                title: `${config.field} Analysis`,
+                field: config.field
+              })}
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{sum.toLocaleString()}</div>
+                <div className="text-sm text-blue-600">Total</div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{avg.toFixed(2)}</div>
+                <div className="text-sm text-green-600">Average</div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{max.toLocaleString()}</div>
+                <div className="text-sm text-purple-600">Maximum</div>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">{min.toLocaleString()}</div>
+                <div className="text-sm text-orange-600">Minimum</div>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-semibold">{fieldValues.length} Records</div>
+              <div className="text-sm text-gray-500">Total count</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const generateHistogramChart = (config: any) => {
+    const values = data.map(row => Number(row[config.field])).filter(val => !isNaN(val));
+    if (values.length === 0) return null;
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const binSize = (max - min) / (config.bins || 10);
+    
+    const bins = Array.from({ length: config.bins || 10 }, (_, i) => ({
+      range: `${(min + i * binSize).toFixed(1)} - ${(min + (i + 1) * binSize).toFixed(1)}`,
+      count: 0
+    }));
+    
+    values.forEach(value => {
+      const binIndex = Math.min(Math.floor((value - min) / binSize), bins.length - 1);
+      if (binIndex >= 0 && binIndex < bins.length) {
+        bins[binIndex].count++;
+      }
+    });
+
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 bg-${config.color}-100 rounded-lg`}>
+              <config.icon className={`h-4 w-4 text-${config.color}-600`} />
+            </div>
+            <CardTitle className="text-lg">{config.title}</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={bins}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+              <XAxis 
+                dataKey="range" 
+                tick={{ fontSize: 10 }} 
+                stroke="#64748B" 
+                angle={-45} 
+                textAnchor="end" 
+                height={80} 
+              />
+              <YAxis tick={{ fontSize: 12 }} stroke="#64748B" />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Bar dataKey="count" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const generateSlicerChart = (config: any) => {
+    const uniqueValues = [...new Set(data.map(row => String(row[config.field])))].slice(0, 20);
+    
+    return (
+      <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg">
+        <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 bg-${config.color}-100 rounded-lg`}>
+              <config.icon className={`h-4 w-4 text-${config.color}-600`} />
+            </div>
+            <CardTitle className="text-lg">{config.title}</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600 mb-3">
+              Filter by {config.field}:
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+              {uniqueValues.map((value, index) => (
+                <Badge 
+                  key={index} 
+                  variant="outline" 
+                  className="cursor-pointer hover:bg-blue-50 hover:border-blue-300"
+                  onClick={() => onGenerateChart && onGenerateChart({
+                    id: `slicer-chart-${Date.now()}`,
+                    type: 'bar',
+                    title: `Analysis for ${value}`,
+                    category: config.field,
+                    value: columns.find(col => col.toLowerCase().includes('sales') || col.toLowerCase().includes('amount')) || columns[1]
+                  })}
+                >
+                  {value}
+                  <Plus className="h-3 w-3 ml-1" />
+                </Badge>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              {uniqueValues.length} unique values • Click to create charts
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (data.length === 0) {
     return (
       <div className="text-center text-gray-500 py-12">
@@ -487,6 +699,12 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data, columns }) => {
               return <div key={index}>{generateLineChart(config)}</div>;
             case 'bar':
               return <div key={index}>{generateBarChart(config)}</div>;
+            case 'card':
+              return <div key={index}>{generateCardChart(config)}</div>;
+            case 'histogram':
+              return <div key={index}>{generateHistogramChart(config)}</div>;
+            case 'slicer':
+              return <div key={index}>{generateSlicerChart(config)}</div>;
             default:
               return null;
           }

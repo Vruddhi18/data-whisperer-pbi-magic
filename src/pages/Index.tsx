@@ -101,7 +101,11 @@ const Index = () => {
               </TabsList>
               
               <TabsContent value="dashboard" className="mt-6">
-                <DashboardCharts data={data} columns={columns} />
+                <DashboardCharts 
+                  data={data} 
+                  columns={columns} 
+                  onGenerateChart={handleGenerateChart}
+                />
               </TabsContent>
 
               <TabsContent value="custom" className="mt-6">
@@ -120,6 +124,12 @@ const Index = () => {
                           config={chart}
                           data={data}
                           onRemove={handleRemoveChart}
+                          onFieldSelect={(field, chartType) => handleGenerateChart({
+                            id: `field-${Date.now()}`,
+                            type: chartType,
+                            title: `${field} Analysis`,
+                            field
+                          })}
                         />
                       ))}
                     </div>
