@@ -8,7 +8,8 @@ import DataTable from '@/components/DataTable';
 import ChatSidebar from '@/components/ChatSidebar';
 import ChartControls, { ChartConfig } from '@/components/ChartControls';
 import CustomChart from '@/components/CustomChart';
-import { MessageSquare, Upload, BarChart3, Table, Settings } from 'lucide-react';
+import { MessageSquare, Upload, BarChart3, Table, Settings, Edit3 } from 'lucide-react';
+import EditableDataTable from '@/components/EditableDataTable';
 
 export interface DataRow {
   [key: string]: string | number;
@@ -85,7 +86,7 @@ const Index = () => {
             </div>
 
             <Tabs defaultValue="dashboard" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-white/70 backdrop-blur-sm">
+              <TabsList className="grid w-full grid-cols-5 bg-white/70 backdrop-blur-sm">
                 <TabsTrigger value="dashboard" className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Dashboard
@@ -97,6 +98,10 @@ const Index = () => {
                 <TabsTrigger value="data" className="flex items-center gap-2">
                   <Table className="h-4 w-4" />
                   Data View
+                </TabsTrigger>
+                <TabsTrigger value="edit" className="flex items-center gap-2">
+                  <Edit3 className="h-4 w-4" />
+                  Edit Data
                 </TabsTrigger>
               </TabsList>
               
@@ -139,6 +144,18 @@ const Index = () => {
               
               <TabsContent value="data" className="mt-6">
                 <DataTable data={data} columns={columns} />
+              </TabsContent>
+              
+              <TabsContent value="edit" className="mt-6">
+                <EditableDataTable 
+                  data={data} 
+                  columns={columns}
+                  onDataChange={(newData) => {
+                    setData(newData);
+                    // Reset custom charts when data changes
+                    setCustomCharts([]);
+                  }}
+                />
               </TabsContent>
             </Tabs>
           </div>

@@ -5,6 +5,7 @@ import { Upload, FileSpreadsheet, AlertCircle, Sheet } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { DataRow } from '@/pages/Index';
+import { detectDateColumns, formatDateColumn, parseDate } from '@/utils/dateParser';
 
 interface ExcelUploaderProps {
   onDataProcessed: (data: DataRow[], columns: string[], fileName: string) => void;
@@ -70,10 +71,28 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
           // Clean and format values
           if (typeof value === 'string') {
             value = value.trim();
-            // Try to convert numeric strings to numbers
-            const numValue = parseFloat(value.replace(/,/g, ''));
-            if (!isNaN(numValue) && value.match(/^[\d,.-]+$/)) {
-              value = numValue;
+            
+            // First check if it's a date
+            const dateParseResult = parseDate(value);
+            if (dateParseResult.isDate) {
+              // Store the original value and display value
+              cleanRow[`${cleanKey}_original`] = dateParseResult.originalValue;
+              cleanRow[`${cleanKey}_timestamp`] = dateParseResult.sortValue;
+              value = dateParseResult.displayValue;
+            } else {
+              // Try to convert numeric strings to numbers
+              const numValue = parseFloat(value.replace(/,/g, ''));
+              if (!isNaN(numValue) && value.match(/^[\d,.-]+$/)) {
+                value = numValue;
+              }
+            }
+          } else {
+            // Check if non-string values might be dates
+            const dateParseResult = parseDate(value);
+            if (dateParseResult.isDate) {
+              cleanRow[`${cleanKey}_original`] = dateParseResult.originalValue;
+              cleanRow[`${cleanKey}_timestamp`] = dateParseResult.sortValue;
+              value = dateParseResult.displayValue;
             }
           }
           
@@ -82,12 +101,17 @@ const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onDataProcessed }) => {
         return cleanRow;
       });
 
-      const columns = Object.keys(cleanedData[0] || {});
-      
+      // Detect and preserve date columns
+      const columns = Object.keys(cleanedData[0] || {}).filter(col => 
+        !col.endsWith('_original') && !col.endsWith('_timestamp')
+      );
+      const dateColumns = detectDateColumns(cleanedData, columns);
+
       console.log('Processed Excel data:', { 
         sheet: sheetName,
         rows: cleanedData.length, 
         columns: columns.length,
+        dateColumns: dateColumns,
         sampleData: cleanedData.slice(0, 3)
       });
 
